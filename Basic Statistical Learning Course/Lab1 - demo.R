@@ -1,0 +1,7 @@
+plot(x, y, xlab = "Hours", ylab = "Number of Bacteria")
+curve(exp(x), add = TRUE, col="red")
+text(2.5, 15, labels = "f(x)", col = "red")
+lines(c(x[which.max(errors)] , x[which.max(errors)]), c(exp(x[which.max(errors)]) , y[which.max(errors)]), col = "blue") 
+text(x[which.max(errors)] - 0.05, y[which.max(errors)] - max(errors) / 2, labels = expression(epsilon), col ="blue")
+lines(c(x[which.min(errors)], x[which.min(errors)]), c(exp(x[which.min(errors)]), y[which.min(errors)]), col = "blue") 
+text(x[which.min(errors)] - 0.05, y[which.min(errors)] - min(errors) / 2, labels = expression(epsilon), col = "blue")

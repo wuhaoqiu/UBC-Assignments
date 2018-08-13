@@ -1,0 +1,129 @@
+---
+title: "lab4"
+author: "Haoqiu Wu"
+date: "2018Äê1ÔÂ29ÈÕ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##classification simulation
+let us start off with a simulation that shows some insight beyond what was discussed in classg2=
+
+suppose we have two groups,both normally distributed ,with the same mean,but different variance
+
+```{r}
+set.seed(3141)
+g1=rnorm(200,mean=30,sd=7)
+g2=rnorm(200,mean=30,sd=1)
+#combine into one data set
+simdata=c(g1,g2)
+
+#add group information
+clas=c(rep("G1",200),rep("G2",200))
+```
+
+this is a difficult classification problem,as the group are essentially nested.
+
+here are the generative distributions
+
+```{r}
+curve(0.5*dnorm(x,mean=30,sd=1),from=10,to=50,col="blue",ylim=c(0,0.08))
+
+curve(0.5*dnorm(x,mean=30,sd=7),from=10,to=50,col="red",add=TRUE)
+```
+
+now let us use logistic regression to perform classification
+
+```{r}
+simlog=glm(factor(clas)~simdata,family="binomial")
+table(predict(simlog,type="response")>0.5,clas)
+```
+
+terrible output! whick makes sense
+
+```{r}
+summary(simlog)
+plot(clas=="G1"~simdata)
+curve(exp(0.526-0.017*x)/(1+exp(0.526-0.017*x)),add=TRUE,col="blue",lwd=3)
+```
+
+logistic regression assumes a single boundary,which is not appropriate in this context
+
+quadratic discriminant analysis is the correct model
+
+```{r}
+library(MASS)
+simqda=qda(clas~simdata)
+table(clas,predict(simqda)$class)
+```
+
+much betther,misclassification rate of 62/400=0.155
+
+but what if one of the froups has fewer observations?
+make sample size of G1 = 380,G2 = 20
+
+```{r}
+set.seed(3141)
+g1=rnorm(380,mean=30,sd=7)
+g2=rnorm(20,mean=30,sd=1)
+
+simdata=c(g1,g2)
+
+clas=c(rep("G1",380),rep("G2",20))
+
+simlog=glm(factor(clas)~simdata,family="binomial")
+table(predict(simlog,type="response")>0.5,clas)
+
+#QDA
+simqda=qda(clas~simdata)
+table(clas,predict(simqda)$class)
+```
+
+so we technically have a misclassification rate of 20/400=0.05,
+but what is actually thing is, this 'low' rate is equivalent to saying i guess group 1, no matter what hte data says.
+
+which would be a stupid way to perform classification
+
+in fact,we are misclassifying 100% of the G2(blue) group.
+
+in other words,the misclassification rate connot be the only consideration when determining a 'good' model,especially true when we have unbalanced groups.
+
+but why is this case so much harder?
+consider the propertions associated with each group(those $\pi_g$ discussed in class).
+
+then we have:
+```{r}
+curve((20/400)*dnorm(x,mean=30,sd=1),from=10,to=50,col="blue",ylim=c(0,0.06))
+
+curve((380/400)*dnorm(x,mean=30,sd=7),from=10,to=50,col="red",add=TRUE)
+```
+
+so no interesctions, with the data that we hace,we will never be able to perform classification. that is because the bayes classifier would even cliam that everything is in the red group.
+
+## Examples from Lecture
+```{r}
+library(gclus)
+library(MASS)
+library(FNN)
+data(body)
+linmod <- lm(body$Gender ~ body$Height)
+plot(body$Gender~body$Height)
+abline(linmod, lwd=3, col="red")
+logmod <- glm(body$Gender ~ body$Height, family=binomial)
+summary(logmod)
+curve(exp(-46.8+0.27*x)/(1+exp(-46.8+0.27*x)), add=TRUE, col="blue", lwd=3)
+abline(v=173.33, col="green", lwd=3)
+
+table(predict(logmod, type="response") > .5, body$Gender)
+89/nrow(body)
+
+ldamod <- lda(body$Gender ~ body$Height)
+table(predict(ldamod)$class, body$Gender)
+92/nrow(body)
+
+knnmod <- knn(body$Height, matrix(body$Height, ncol=1), cl=body$Gender, k=7)
+table(knnmod, body$Gender)
+85/nrow(body)
+```

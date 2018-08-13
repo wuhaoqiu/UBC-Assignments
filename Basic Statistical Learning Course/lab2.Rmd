@@ -1,0 +1,196 @@
+---
+title: "Lab2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##assessing models:MSe
+simulate training data by generateding x values and then assuming an exponent relationship between x and y
+```{r}
+set.seed(23418)
+x=sort(runif(30,0,3))
+y=exp(x)+rnorm(length(x))
+plot(x,y)
+```
+fit a linear model and add it to the plot in red
+NOte: in r-markdown need to re-plot x and y in any new code chunk when adding new lines
+```{r}
+plot(x,y)
+linmod=lm(y~x)
+abline(linmod,col="red",lwd=3)
+```
+local polynomial - relatively flexible model
+
+```{r}
+plot(x,y)
+localpoly1=loess(y~x,span=0.75)
+lines(x,predict(localpoly1),col="blue",lwd=3)
+```
+third model,approximates'connect the dots'
+
+```{r}
+plot(x,y)
+localpoly2=loess(y~x,span=0.1)
+lines(x,predict(localpoly2),col="green",lwd=3)
+```
+
+training MES for each of the models
+predic() function ~provides the y~hat for the training data
+
+```{r}
+trmse_red=mean((y-predict(linmod))^2)
+trmse_blue=mean((y-predict(localpoly1))^2)
+trmse_green=mean((y-predict(localpoly2))^2)
+
+round(trmse_red,2)
+round(trmse_blue,2)
+round(trmse_green,2)
+```
+now we are going to generate 10 new points and plot them with the model
+
+```{r}
+set.seed(41368)
+xnew=sort(runif(10,0,3))
+ynew=exp(xnew)+rnorm(length(xnew))
+
+plot(x,y)
+abline(linmod,col="red",lwd=3)
+lines(x,predict(localpoly1),col="blue",lwd=3)
+lines(x,predict(localpoly2),col="green",lwd=3)
+points(xnew,ynew,pch=17,col="green",cex=1.5)
+```
+check the MSE for the test set
+```{r}
+temse_red=mean((ynew-predict(linmod,data.frame(x=xnew)))^2)
+temse_blue=mean((ynew-predict(localpoly1,data.frame(x=xnew)))^2)
+temse_green=mean((ynew-predict(localpoly2,data.frame(x=xnew)))^2)
+
+temse_red
+temse_blue
+temse_green
+```
+testing MSE will generally be larger than the training MSE
+
+##assessing models:classification
+simulate an underlying classification model where the variables are uniformly distributed
+
+```{r}
+set.seed(4623)
+x1=runif(100,-1,1)
+x2=runif(100,-1,1)
+plot(x1,x2)
+#probability of being in class 1 is based on x2 when x2 is 0 or more
+```
+
+```{r}
+clas=rep(NA,length(x2))
+```
+
+replace each NA with an "observed" classification sampled from above
+```{r}
+for(i in 1:length(x2)){
+    clas[i]=sample(c(1,2),size=1,prob = c(max(0,x2[i]),min(1-x2[i],1)))
+}
+```
+plot the points according to their obseved classification and include the bayes classifier boundary(at x2=0.5)
+```{r}
+
+plot(x1,x2,col=clas,pch=16)
+abline(h=0.5,col="blue")
+```
+observed classification error
+```{r}
+table(x2>0.5,clas)
+sum(diag(table(x2>0.5,clas)))/length(x2)#diag是为了取矩阵对角线上的值
+```
+KNN for k=15,k=10,k=1
+takes both a training set and a testing set
+```{r}
+library(class)
+mod15=knn(cbind(x1,x2),cbind(x1,x2),clas,k=15,prob=TRUE)
+table(clas,mod15)
+(length(clas)-sum(diag(table(clas,mod15))))/length(clas)
+    
+mod10=knn(cbind(x1,x2),cbind(x1,x2),clas,k=10,prob=TRUE)
+table(clas,mod10)
+(length(clas)-sum(diag(table(clas,mod10))))/length(clas)
+    
+mod1=knn(cbind(x1,x2),cbind(x1,x2),clas,k=1,prob=TRUE)
+table(clas,mod15)
+(length(clas)-sum(diag(table(clas,mod1))))/length(clas)
+```
+make a big grid of values
+```{r}
+gridseq=seq(-1,1,0.01)
+gridx1=rep(gridseq,each=length(gridseq))
+gridx2=rep(gridseq,length(gridseq))
+#we are putting a point at each 0.01 increment in both x1 and x2
+plot(gridx1,gridx2,pch=".")
+
+mod15=knn(cbind(x1,x2),cbind(gridx1,gridx2),clas,k=15,prob = TRUE)
+mod10=knn(cbind(x1,x2),cbind(gridx1,gridx2),clas,k=10,prob = TRUE)
+mod1=knn(cbind(x1,x2),cbind(gridx1,gridx2),clas,k=1,prob = TRUE)
+```
+```{r}
+plot(x1, x2, col = clas, pch=16, main="KNN with k=15")
+abline(h = 0.5, col="blue")
+conprob <- attr(mod15, "prob") 
+conpoints <- ifelse(mod15==1, conprob, 1-conprob)
+conmat <- matrix(conpoints, length(gridseq), length(gridseq))
+contour(gridseq, gridseq, t(conmat), levels=0.5, nlevels=1, add=TRUE, col="black", lwd=3)
+```
+
+```{r}
+plot(x1, x2, col = clas, pch=16, main="KNN with k=10")
+abline(h = 0.5, col="blue")
+conprob <- attr(mod10, "prob") 
+conpoints <- ifelse(mod10==1, conprob, 1-conprob)
+conmat <- matrix(conpoints, length(gridseq), length(gridseq))
+contour(gridseq, gridseq, t(conmat), levels=0.5, nlevels=1, add=TRUE, col="black", lwd=3)
+```
+
+```{r}
+plot(x1, x2, col = clas, pch=16, main="KNN with k=1")
+abline(h = 0.5, col="blue")
+conprob <- attr(mod1, "prob") 
+conpoints <- ifelse(mod1==1, conprob, 1-conprob)
+conmat <- matrix(conpoints, length(gridseq), length(gridseq))
+contour(gridseq, gridseq, t(conmat), levels=0.5, nlevels=1, add=TRUE, col="black", lwd=3)
+```
+##simple linear regression
+commands for the car example from lecture
+
+```{r}
+data(cars)
+plot(cars)
+attach(cars)
+carlm=lm(dist~speed)
+summary(carlm)
+abline(carlm)
+```
+simulation to show model variance
+```{r}
+for(i in 1:100){
+    x=runif(30,0,3)
+    y=-2*x+8+rnorm(length(x))
+    if(i==1) plot(x,y,type = "n")
+    abline(a=8,b=-2,lwd=3)
+    sinlm=lm(y~x)
+    abline(sinlm,col="red")
+}
+```
+
+the last one
+the only thing change here is y
+```{r}
+for(i in 1:100){
+    x=runif(30,0,3)
+    y=runif(30,2,8)
+    if(i==1) plot(x,y,type = "n")
+    sinlm=lm(y~x)
+    abline(sinlm,col="red")
+
+}

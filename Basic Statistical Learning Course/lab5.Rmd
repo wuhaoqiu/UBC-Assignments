@@ -1,0 +1,139 @@
+---
+title: "lab5"
+author: "Haoqiu Wu"
+date: "2018Äê2ÔÂ5ÈÕ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###single linkage chaining
+let us simulate a weired data set with 2 clusters and a line of points running between them.
+
+```{r}
+#make sure you have installed packages MASS
+library(MASS)
+datagen1=mvrnorm(25,c(0,0),matrix(c(1,0,0,1),2,2))
+
+datagen2=mvrnorm(25,c(5,-5),matrix(c(1,0,0,1),2,2))
+
+datagen=rbind(datagen1,datagen2)
+
+x1=seq(from=0,to=5,by=0.2)
+x2=seq(from=0,to=-5,by=-0.2)
+
+newvalx=cbind(x1,x2)
+
+datagen=rbind(datagen,newvalx)
+
+plot(datagen)
+```
+
+we will use manhattan distance first
+
+```{r}
+mandist=dist(datagen,method = "manhattan")
+clus1=hclust(mandist,method = "single")
+plot(clus1)
+```
+
+useing single linkage we have major difficulty finding an underlying group structure. the plot above is a tell-tale sign of the phenomenon 
+"chainging"- that u keep adding observations to one group for the majority of the algorithm.
+
+the problem tends to only be a concern with single linkage.
+
+manhattan distance,average linkage,compare
+```{r}
+clus2=hclust(mandist,method = "average")
+plot(clus2)
+```
+
+note that switching to euclidean distance does not fix the chaining issue,but does result in slightly different groups.
+
+```{r}
+eucdist=dist(datagen,method = "euclidean")
+clus3=hclust(eucdist,method = "single")
+plot(clus3)
+
+#euclidean,complete
+
+clus4=hclust(eucdist,method = "complete")
+plot(clus4)
+```
+
+specify where to cut the tree by requesting a specific number of groups,
+and then compare hte results
+
+```{r}
+mancom=cutree(clus2,2)
+euccom=cutree(clus4,2)
+
+table(mancom,euccom)
+
+plot(datagen,col=mancom)
+
+eucsin=cutree(clus3,2)
+table(euccom,eucsin)
+```
+
+##K-means
+let us code up the k-means algorithm together
+
+reviews the steps to k-means:
+1/  start with k random points to use as centroids(let us use points within the data)
+2/ assign all observations to their closest centroid(by euclidean distance)
+3/ recalculate te group means, call these your new centroids
+4/ repeat 2,3 until nothing changes
+
+make a function that takes in data 'x' and the number of groups k
+
+```{r}
+my_k_means=function(x,k){
+    #start with k centroids
+    centrs=x[sample(1:nrow(x),k),]#entire row
+    
+    #start a loop
+    changing=TRUE
+    
+    while(changing){
+        #2a claculate distances between all x and centers
+        dists=matrix(NA,nrow(x),k)
+        #find distance and store in dists
+        for(i in 1:nrow(x)){
+            for(j in 1:k){
+                dists[i,j]=sqrt(sum((x[i,]-centrs[j,])^2))
+            }#end of in for
+        }#end of out for
+        
+        #2b assign group memberships
+        #any points closest to a group and it belong to that group
+        membs=apply(dists,1,which.min)
+        
+        #3 calculate new group centroids
+        oldcentrs=centrs#save for convergence check
+        
+        for(j in 1:k){
+            centrs[j,]=colMeans(x[membs==j,])#calculate column mean
+        }#end of for
+        
+        #4 check for convergence
+        if(all(centrs==oldcentrs)){
+            changing=FALSE
+        }#end of if
+        
+    }#end of while
+    
+    #output memberships
+    membs
+
+}
+
+set.seed(5314)
+test<-my_k_means(faithful,2)
+plot(faithful,col=test)
+
+test2=kmeans(faithful,2)
+plot(faithful,col=test2$cl)
+```

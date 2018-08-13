@@ -1,0 +1,150 @@
+---
+title: "Lab6"
+author: "Haoqiu Wu"
+date: "2018年2月19日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###corss-validation
+it is the relatively easy to set-up leave one out cross validation yourself for any analysis
+
+we can do it for the simple linear model
+
+```{r}
+data(cars)
+attach(cars)
+
+cvlm=list()
+msecv=NA
+
+for(i in 1:nrow(cars)){
+    cvspeed=speed[-i]#move out one obervation point
+    cvdist=dist[-i]#move out one response point
+    
+    cvlm[[i]]=lm(cvdist~cvspeed)#fit the model
+    msecv[i]=(predict(cvlm[[i]],newdata=data.frame(cvspeed=speed[i]))-dist[i])^2
+}
+mean(msecv)
+```
+
+which can be compared to the mse for the regular model fit...
+
+```{r}
+lmfull=lm(dist~speed)
+mean((predict(lmfull)-dist)^2)
+
+```
+
+as expected,the mse for the model fitted on the whole data is lower than that which is predicted using cross-validation.
+
+many analyses have cv built in . here we can make use of that to choose the number of nearest neighbours for KNN regression
+
+```{r}
+#install.packages("FNN") if havenot before
+
+library(FNN)
+
+kr=list()
+predmse=NA
+
+for(i in 1:49){
+    kr[[i]]=knn.reg(speed,test=NULL,dist,k=i)
+    
+    predmse[i]=kr[[i]]$PRESS/nrow(cars)
+    
+}
+
+plot(predmse,type = "l",lwd=3,col="red")
+
+which.min(predmse)
+
+seqx=seq(from=0,to=30,by=0.01)
+knnr=knn.reg(speed,y=dist,test=matrix(seqx,ncol=1),k=2)
+
+
+```
+
+this is also used for classification procedures.
+For example,LDA...
+
+```{r}
+library(gclus)
+data(wine)
+attach(wine)
+
+library(MASS)
+
+ldacv=lda(wine[,-1],wine[,1],CV=TRUE)
+table(wine[,1],ldacv$class)
+nrow(wine)
+
+head(wine,10)
+
+head(wine[,1])
+head(wine[,-1])
+```
+
+#boostrap-lab6-from connect-paste here
+#Copy + paste into R-Markdown document
+
+## Bootstrap
+Here we will recreate the simulation provided in lecture for the nonparametric boostrap
+
+```{r}
+x <- runif(30, 0, 1)
+y <- 2*x + rnorm(30, sd=0.25)
+
+mod1 <- lm(y~x)
+
+newx <- list()
+newy <- list()
+modnew <- list()
+coefs <- NA
+for(i in 1:1000){
+  newx[[i]] <- runif(30, 0, 1)
+  newy[[i]] <- 2*newx[[i]] + rnorm(30, sd=0.25)
+  modnew[[i]] <- lm(newy[[i]]~newx[[i]])
+  coefs[i] <- modnew[[i]]$coefficients[2]
+}
+
+#Bootstrap
+newboots <- list()
+bootsmod <- list()
+bootcoef <- NA
+xy <- cbind(x,y)
+for(i in 1:1000){
+  newboots[[i]] <- xy[sample(1:30, 30, replace=TRUE),]#这里sample的是xy矩阵的行,随机从30行里选一行x和y
+  #this is the list so we need to use double bracket
+  bootsmod[[i]] <- lm(newboots[[i]][,2]~newboots[[i]][,1])
+  bootcoef[i] <- bootsmod[[i]]$coefficient[2]
+}
+summary(mod1)$coefficients
+sd(coefs)
+sd(bootcoef)
+```
+The theoretical standard error is 0.1581, so our hope is that all three values should be close to that. `sd(coefs)` (aside from the theoretical truth) would be a gold-standard approach for finding that value --- but essentially impossible in practice to repeatedly gather new data. `summary(mod1)$coefficients` is based on the linear regression assumptions (iid normal error, etc) and only one model fit. `sd(bootcoef)` is the bootstrap estimator based on resampling (with replacement) from the original sample. 
+
+```{r}
+train_knn=createDataPartition(HR_3$left, p=0.6, list=FALSE)
+training_knn=HR_3[train,]
+testing_knn=HR_3[-train,]
+
+kr=list()
+predmse=NA
+
+for(i in 1:49){
+    kr[[i]]=knn.reg(training_knn[,-7],test=testing_knn[,-7],training_knn$left,k=i)
+    
+    predmse[i]=1-mean( kr[[i]]$pred==testing_knn$left)
+    
+}
+
+plot(predmse,type = "l",lwd=3,col="red")
+
+which.min(predmse)
+predmse[1]
+``` 

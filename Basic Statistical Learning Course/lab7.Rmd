@@ -1,0 +1,111 @@
+---
+title: "lab7"
+author: "Haoqiu Wu"
+date: "2018Äê2ÔÂ26ÈÕ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## trees
+let us run classification trees on the body data set that you have seen previously (several physical measurements on 507 people)
+
+```{r}
+library(tree)
+library(gclus)
+set.seed(12412)
+data(body)
+body$Gender=factor(body$Gender)#make categorical to factor
+bod=data.frame(body)
+
+bocl=tree(Gender~.,data=bod)
+plot(bocl)
+text(bocl)#label decision result, otherwise there are not results on the leave of each tree
+```
+
+note the furthest split to the right,we see that on both sides of the binary split, the prediction is still 1(male).
+
+this is not a mistake but rather a byproduct of how the tree is being built-gini index
+
+so, suppose have a node with 70 male and 30 females.We would predict male on this node and have 30 misclassifications.
+
+average gini index of
+```{r}
+.3*.7+.7*.3
+#or
+2*.3*.7
+```
+
+now we consider another split where the left side gives us 20 males,0 females and the right side gives us 50 males,30 females.
+
+we still predict male for both nodes, and we still have 30 misclassifications.
+
+Average gini index
+```{r}
+#(2*(1*0))+2*(5/8)*(3/8))/2
+```
+
+pruning strategy on classification trees focuses on the misclassification rate...
+
+```{r}
+cv.bocl=cv.tree(bocl,FUN=prune.misclass)
+plot(cv.bocl,type='b')
+
+p.bocl=prune.misclass(bocl,best=9)
+plot(p.bocl)
+text(p.bocl)
+summary(p.bocl)
+```
+
+we see that those strange cases are pruned away.
+
+##Bagging trees
+since there are 24 predictors in the data, we just tell R to perform random forests such that all predictors are considered at each split
+```{r}
+library(randomForest)
+set.seed(2331)
+
+bodybag=randomForest(Gender~.,data=bod,mtry=24,importance=TRUE)
+
+bodybag
+```
+
+the misclassification rate is a prediction of future misclassification rates-since it is based on the out-of-bag samples
+
+we can therefore compare it to cv results from other methods
+
+```{r}
+library(MASS)
+bodylda=lda(Gender~., data=bod,CV=TRUE)
+table(bod$Gender,bodylda$class)
+```
+
+clearly LDA is a superior model on this data.
+we can look at variable importance from the bagging model.
+```{r}
+varImpPlot(bodybag)
+```
+
+we would consider using some of this information to perform variable selection to feed into LDA, for example.
+
+use biacrom,forearmG ,shoulderG since they appear important on the variable importance plot.
+
+```{r}
+redbodylda=lda(Gender~Biacrom+ShoulderG+ForearmG,data=bod,CV=TRUE)
+table(bod$Gender,redbodylda$class)
+```
+
+the reduced lda performs worse than the LDA with all the variables
+
+##Random Forest
+Recall:the only difference between bagging and random forest is that for random forest, we randomly remove predictors from consideration at each binary split, but bagging always consider all the variables at each split.
+
+```{r}
+set.seed(4521)
+bodyRF=randomForest(Gender~., data=bod,importance=TRUE)
+bodyRF
+varImpPlot(bodyRF)
+```
+

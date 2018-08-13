@@ -1,0 +1,156 @@
+---
+title: "lab3"
+author: "Haoqiu Wu"
+date: "2018Äê1ÔÂ22ÈÕ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## write functioons in r -basis
+let us learn the structure of writing our own functions.to learn syntax, we will simly
+make a function that adds 10 to any inputed value
+
+```{r}
+shift10=function(x){
+    newx=x+10
+    newx
+}
+```
+note that the final line in the functionn will be the outputted value
+
+```{r}
+y=shift10(40)
+y
+```
+
+in many of the artistic sports, the judging panel is comprised of serveral countries and a participant score is averaged after removing minimum and maximum values
+
+write a function which performs this type of averaging for any inputted vector of numeric values.
+call it olymean
+
+```{r}
+olymean=function(x){
+    sort_x=sort(x)
+    trim_x=sort_x[-c(1,length(x))]
+    mean(trim_x)
+}
+```
+
+test this function based on faithful dataset
+```{r}
+mean(faithful$waiting)
+olymean(faithful$waiting)
+```
+
+what if your input dataset has missing value
+
+```{r}
+mean(airquality$Ozone)
+olymean(airquality$Ozone)
+#becaue sort funtion has omitted the na value
+``` 
+the mean function has issues with nas, we can fix that  by setting option na.rm=TRUE
+```{r}
+mean(airquality$Ozone,na.rm = TRUE)
+```
+
+## analyses from lecture
+here are the simple and multiple linear regression models as fit on the life expectancy data
+```{r}
+stdata=data.frame(state.x77)
+slr=lm(stdata$Life.Exp~stdata$Illiteracy)
+summary(slr)
+
+mlr=lm(stdata$Life.Exp~stdata$Illiteracy+stdata$Murder+stdata$HS.Grad+stdata$Frost)
+summary(mlr)
+```
+
+here are the model fittings provided for the body data set
+```{r}
+library("gclus")
+data(body)
+simlm=lm(body$Weight~body$Height)
+mutlm=lm(body$Weight~body$Height+body$Gender)
+summary(mutlm)
+summary(simlm)
+``` 
+note that the gender variable is recorde as 0 and 1. many times, the data will be in a character string form
+```{r}
+head(body$Gender)
+body$Gender[body$Gender==1]="Male"
+body$Gender[body$Gender==1]="Female"
+```
+what happens if we fit the model now?
+``` {r}
+multlm=lm(body$Weight~body$Height+body$Gender)
+summary(multlm)
+```
+some functions may have no problem figuring out to do with character strings, other times we may have to tell r to treat them as categories
+this is generally done with the 'factor' command
+```{r}
+body$Gender=factor(body$Gender)
+multlm=lm(body$Weight~body$Height+body$Gender)
+summary(multlm)
+```
+
+we may be interested in changing the reference level for the creation of dummy variables
+the relevel command can take care of this
+```{r}
+body$Gender=relevel(factor(body$Gender),ref = "Male")
+multlm=lm(body$Weight~body$Height+body$Gender)
+summary(multlm)
+```
+finally we can fit the model with interactions
+```{r}
+intlm=lm(body$Weight~body$Height*body$Gender)
+summary(intlm)
+```
+
+now look at quadratic simulation
+
+```{r}
+set.seed(3531)
+x=runif(30,-2,2)
+y=15+2.3*x-1.5*x^2+rnorm(30)
+
+plot(y~x)
+linmod=lm(y~x)
+abline(linmod,col="blue",lwd=3)
+
+x2=x^2
+quadmod=lm(y~x+x2)
+summary(quadmod)
+```
+
+```{r}
+plot(y~x)
+curve(15.35+2.27*x-1.67*x^2,add=TRUE,col="red",lwd=3)
+```
+KNN. we will have to install the FNN packages
+```{r}
+library(FNN)
+xmat=cbind(x,x2)
+seqx=seq(from=-2,to=2,by=0.001)
+
+plot(y~x,main="k=20 Green,k=5 Purple,k=1 Brown")
+
+knnr20=knn.reg(xmat,y=y,test=cbind(seqx,seqx^2),k=20)
+lines(seqx,knnr20$pred,col="green",lwd=1)
+
+knnr5=knn.reg(xmat,y=y,test=cbind(seqx,seqx^2),k=5)
+lines(seqx,knnr5$pred,col="purple",lwd=1)
+
+knnr1=knn.reg(xmat,y=y,test=cbind(seqx,seqx^2),k=1)
+lines(seqx,knnr1$pred,col="brown",lwd=1)
+
+plot(y~x)
+abline(linmod,col="blue",lwd=3)#linear model
+
+curve(15.35+2.27*x-1.67*x^2,add=TRUE,col="red",lwd=3)#quadratic model
+
+lines(seqx,knnr5$pred,col="purple",lwd=3)#knn reg,k=5
+
+curve(15+2.3*x-1.5*x^2,add = TRUE,col="black",lty="dashed")#true model(since simulated)

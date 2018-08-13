@@ -1,0 +1,49 @@
+---
+title: "lab11"
+author: "Haoqiu Wu"
+date: "2018Äê3ÔÂ26ÈÕ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##association rules
+
+we saw assciations rule in the context of actual transcations, but they can also be viewed on the categorical data by using what is commonly called one-hot encoding
+
+all it means is making an indicator variable for each level of the factor. the arules package can coerce factors into the desiered form.
+
+let us check out some survey data...
+
+two packaged needed "arules" and "effects"
+
+```{r}
+library(effects)
+library(arules)
+
+data(WVS)
+head(WVS)
+summary(WVS)
+#convert a numerical variable to a categorical variable
+WVS$age=discretize(WVS$age,method="interval", breaks=4)#want four groups
+table(WVS$age)
+
+asurv=apriori(WVS)
+summary(asurv)
+
+inspect(sort(asurv,by="support")[1:10])
+inspect(sort(asurv,by="confidence")[1:10])
+inspect(sort(asurv,by="lift")[1:10])
+inspect(sort(asurv,by="support",decreasing = FALSE)[1:10])
+
+asurv=apriori(WVS,parameter = list(supp=0.04,conf=0.8))
+summary(asurv)
+#now look at the association rule after the changing the thresholds
+
+inspect(sort(asurv,by="support")[1:10])
+inspect(sort(asurv,by="confidence")[1:10])
+inspect(sort(asurv,by="lift")[1:10])
+inspect(sort(asurv,by="support",decreasing = FALSE)[1:10])
+

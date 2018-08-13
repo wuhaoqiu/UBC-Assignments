@@ -1,0 +1,163 @@
+---
+title: "lab9"
+author: "Haoqiu Wu"
+date: "2018Äê3ÔÂ12ÈÕ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##lecture simulations
+let us start by recreating the simulations from lecture
+
+weassume the oredictors are normally distributed (with different means and standart debiations) and the response is assumed 
+$Y=20+3X_1-2X_2+\epsilon$  where epsilon is normal $(\mu=0,\sigma^2=4)$
+
+```{r}
+library(glmnet)
+set.seed(35521)
+x1=rnorm(30,0,3)
+x2=rnorm(30,1,4)
+y=20+3*x1-2*x2+rnorm(length(x1),sd=2)
+
+plot(y~x1+x2)
+x=cbind(x1,x2)
+```
+
+now we fit a standard linear model to see how close we are to estimate the true model
+
+```{r}
+linmod=lm(y~x1+x2)
+summary(linmod)
+```
+
+now ridge regression
+```{r}
+rrsim_d=cv.glmnet(x,y,alpha=0)
+plot(rrsim_d$glmnet.fit,label=TRUE,xvar="lambda")
+plot(rrsim_d)
+rrsim_d$lambda.min
+```
+
+since the minimum was determined nearly at the lower boundary of $\lamda$ it is worthwhile to try a different grid of $\lamda$ values than what the default provides
+
+```{r}
+grid=exp(seq(10,-6,length=100))
+set.seed(451642)
+rrsim=cv.glmnet(x,y,alpha=0,lambda=grid)
+plot(rrsim$glmnet.fit,label=TRUE,xvar="lambda")
+plot(rrsim)
+
+rrsim$lambda.min
+
+```
+
+sure enough, the minimal error arises from a smaller lambda than our original grid tested.
+
+```{r}
+lammin=rrsim$lambda.min
+lamlse=rrsim$lambda.lse
+rrsimmin=glmnet(x,y,alpha=0,lambda=lammin)
+rrsimlse=glmnet(x,y,alpha=0,lambda=lamlse)#a standart error away from minimum
+
+coef(rrsimmin)
+coef(rrsimlse)
+```
+
+let us throw those results into a table for easy comparison
+```{r}
+coeftab=cbind(c(20,3,-2),coef(linmod),coef(rrsimmin),coef(rrsimlse))
+colnames(coeftab)=c("true","lm","rige regression using min","ridge regression using 1se")
+round(coeftab,2)#round to two decimal places
+```
+
+so ridge regression with $\lambda$ with estimated minimum mse from cv provides estimates claser to the true values than the standard linear approach as 
+
+so ridge regression with $\lambda$ with estimated minimum mse from cv provides estimates closer to the true values than the standard linear model approach as well as the ridge regression with$\lambda$ within 1 standard error of the minimum
+
+we can use the same commands for the lasso,only difference is alpha equal to one instead of zero..
+```{r}
+#repreat procedures above for lasso
+```
+results are essentially the same between ridge regression and lasso on this simulation. this is because two approach the true model, we oonly need to slightly shrink the original estimates.
+also there are no uesless predictors to remove in this case.
+
+let us change that...
+
+##lasso and logistic on real data set.
+go to connect and download golub.rdata
+
+```{r}
+load("golub.Rdata")
+``` 
+
+note that the data is set up transposed to what we are used to.
+we have only 38 observations (tumor samples),but 3051 measurements.
+p is much greater than n.
+
+``` {r}
+lagol=cv.glmnet(t(golub),golub.cl,alpha=1,family="binomial")#transpose at first
+plot(lagol)
+``` 
+again the minimym at the boundary
+
+```{r}
+grid=exp(seq(-10,-3,length=100))
+
+lagol2=cv.glmnet(t(golub),golub.cl,alpha=1,family="binomial",lambda=grid)
+plot(lagol2)
+
+plot(lagol2$glmnet.fit,label=TRUE,xvar="lambda")
+
+lagol2$lambda.min
+```
+
+so looks like 24-ish variables (25 actually we will see later) remain in the model with the smallest predited error according to cv.
+
+we can see how this does on the observations data..
+
+```{r}
+table(golub.cl,predict(lagol2,newx=t(golub),s=lagol2$lambda.min,type="class"))
+```
+
+so with expression levels from 25 genes we can perfectly differentiate between the two types.(probably overfitting)
+
+we probably want to know which genges are being used
+
+``` {r}
+golcoef=as.matrix(coef(lagol2,s=lagol2$lambda.min))
+
+which(golcoef!=0)#use which to find which coeffcient is not equal to zero
+
+``` 
+that gives us the variable indices with no zero cofficient
+
+the golub data set also loads variable names stored in golub.gnames.
+
+``` {r}
+
+golub.gnames[which(golcoef!=0),2]
+```
+
+```{r}
+set.seed(52141)
+bmat <- matrix(rnorm(50000), nrow=500)
+dim(bmat)
+y <- rnorm(500)
+bsimcv <- cv.glmnet(bmat, y, alpha=1)
+plot(bsimcv)
+plot(bsimcv$glmnet.fit, label=TRUE, xvar="lambda")
+```
+
+In this case, the lambda within 1 standard error appears to be at the boundary. So lets again manually specify a grid of lambda to see what happens...
+
+```{r}
+grid <- exp(seq(-6, -1, length=100))
+plot(grid)
+bsimcv2 <- cv.glmnet(bmat, y, alpha=1, lambda=grid)
+plot(bsimcv2)
+```
+
+Interesting! The model that removes all predictors (and thereby only models according to the intercept) has a CV estimate of the MSE within 1 standard error of the minimum predicted MSE. This is a telltale sign that there are probably no useful predictors sitting in this data set!

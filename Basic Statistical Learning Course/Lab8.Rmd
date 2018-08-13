@@ -1,0 +1,82 @@
+---
+title: "Lab8"
+author: "Jeff"
+date: "March 3, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Basic Neural Nets in R
+
+Let's start with using the `neuralnet` package to approximate the linear model for the cars data, as shown in lecture. 
+```{r}
+#install.packages("neuralnet")
+library(neuralnet)
+?"neuralnet"
+data(cars)
+plot(cars)
+attach(cars)
+carlm <- lm(dist~speed, data=cars)
+summary(carlm)
+sum(carlm$residuals^2)
+nn <- neuralnet(dist~speed, data=cars, hidden=0)
+plot(nn)
+sum((compute(nn, speed)$net.result-dist)^2)
+```
+
+Note that the `neuralnet` package can only deal with numeric responses. If we have a binary response, we can basically approximate a classification scheme by pretending we're modelling the probability (but of course, it might suggest values outside of the realm of probability, aka <0 or >1). Also, `neuralnet` cannot take simplified formulas such as "Response ~ ." instead, one has to explicitly type out each response and predictor by name in the formula (there are tricks around this, but it's aggravating regardless).
+
+Fortunately, there are many neural network packages out there... `nnet` is another one. It has no built-in plotting function, so we also install `NeuralNetTools` for visualization purposes. Let's look at the body example from class.
+```{r}
+library(gclus)
+data(body)
+sbod <- cbind(scale(body[,1:24]), factor(body[,25]))
+colnames(sbod)[25] <- "Gender"
+library(nnet)
+nnbod2 <- nnet(factor(Gender)~., data=sbod, size=4)
+table(body[,25], predict(nnbod2, type="class"))
+library(NeuralNetTools)
+plotnet(nnbod2)
+```
+
+0 misclassifications, but again, as discussed in class, this is probably overfitting...let's set up a training and testing set
+
+```{r}
+set.seed(53747958)
+bindex <- sample(1:nrow(sbod), 250)
+btrain <- sbod[bindex,]
+btest <- sbod[-bindex,]
+nnbodtr <- nnet(factor(Gender)~., data=btrain, size=4)
+table(btest[,25], predict(nnbodtr, newdata=btest[,-25], type="class"))
+```
+In lecture, we left it at that. But we can easily setup a loop to investigate if there's a better option for the number of hidden layer variables according to the training error. Since it fits relatively quickly, let's make a quick loop. Note that `nnet` has an annoying printout whenever it is fitted, the help file doesn't provide any clear way to silence it...but a little googling can lead us to an argument `trace=FALSE`.
+
+```{r}
+for(i in 1:10){
+  nnbodtr <- nnet(factor(Gender)~., data=btrain, size=i, trace=FALSE)
+  print(paste("Number of hidden layer variables:", i))
+  print(table(btest[,25], predict(nnbodtr, newdata=btest[,-25], type="class")))
+}
+```
+
+From this fit, it appears the best neural net (ignoring changing activation functions, number of hidden layers, or any other tuning parameters) will result in a predicted misclassification rate around 1.6%. We can compare this to LDA... 
+
+```{r}
+library(MASS)
+blda <- lda(factor(Gender)~., data=data.frame(btrain))
+table(btest[,25], predict(blda, newdata=data.frame(btest[,-25]))$class)
+```
+...which appears equivalent to the neural net in terms of predictive power on this data. Importantly though, LDA provides us a structure for inference as well (we can investigate the estimated mean vector of each group, the covariances, decision boundary, etc). What about random forests...
+```{r}
+library(randomForest)
+rfbod <- randomForest(factor(Gender)~., data=data.frame(btrain))
+rfbod
+```
+Once more, since the output provides OOB error rates, they are believable for future predictions. That said, let's look at predicting for the test set for a direct comparison to the LDA and NN models...
+```{r}
+table(btest[,25], predict(rfbod, newdata=data.frame(btest[,-25])))
+```
+All the results point to the RF model being less strong on this data versus LDA or NN.
