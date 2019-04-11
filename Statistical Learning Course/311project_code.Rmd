@@ -1,0 +1,217 @@
+---
+title: "project311"
+author: "Haoqiu Wu"
+date: "2018Äê4ÔÂ2ÈÕ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+HR <- read.csv("C:/Users/whq672437089/Desktop/project/human-resources-analytics/HR.csv")
+dim(HR)
+attach(HR)
+str(HR)
+summary(HR)
+```
+
+#LDA
+```{r}
+library(MASS)
+
+data1 <- read.csv("HR.csv", header = TRUE)
+head(data1)
+
+lda_model <- lda(left ~ satisfaction_level + last_evaluation + number_project + average_montly_hours + year_spent_company, data1)
+lda_model
+
+lda_table <- table(data1$left, predict(lda_model)$class)
+lda_table
+
+accuracy <- sum(diag(lda_table))/sum(lda_table)*100
+accura
+``` 
+
+
+```{r}
+#PCA,at first, there are character variable in the data frame so we need to transform them to numeric variable
+HR_2=mutate(HR,salary_convert=as.numeric(HR$salary),department_convert=as.numeric(as.factor(HR$department)))
+HR_pca=prcomp(HR_2[,c(-7,-9,-10)],scale. = TRUE)
+
+plot(HR_pca,type="l")
+
+summary(HR_pca)
+#The observations (cell lines) corresponding to whether left type will be plotted in the same color. We
+#first create a simple function that assigns a distinct color to each element
+#of a numeric vector. The function will be used to assign a color to people who left and who not left
+Cols= function(vec){
+ cols= rainbow (length(unique(vec)))
+ return (cols[as.numeric(as.factor(vec))])
+}
+
+plot(HR_pca$x[,1:2],col=Cols(HR$left))
+plot(HR_pca$x[,c(1,3)],col=Cols(HR$left))
+```
+
+#from PCA analysis, we can clearly see that there may be exist two or three groups for people who left,in order to verify ,let us use cluster method to cluster
+``` {r cache=TRUE}
+HR_2_left=subset(HR_2,left==1)
+clus.complete=hclust(dist(HR_2_left[,c(-7,-9,-10)]),method = "complete")
+plot(clus.complete,main = "complete")
+#from the dengrom, it is clear the we can seperate people who left into three groups
+``` 
+
+#logistic regression and CV and lasso/ridge
+```{r}
+library(boot)
+library(ROCR)
+HR_logistic=glm(left~.,family = binomial,data = HR)
+summary(HR_logistic)$coef
+logistic_error=cv.glm(HR,HR_logistic,K=10)$delta[1]%>%print()
+#ROC and AUC
+prob=predict(HR_logistic,HR,type = "response")
+pred=prediction(prob,HR$left)
+perf=performance(pred,"tpr","fpr")
+plot(perf)
+auc=performance(pred,"auc")
+auc@y.values[[1]]
+```
+
+```{r}
+#a function used to label curve
+label_curve <- function(fit, ...) {
+    L <- length(fit$lambda)
+    x <- log(fit$lambda[L])
+    y <- fit$beta[, L]
+    labs <- names(y)
+    text(x, y, labels=labs, ...)
+}
+
+#ridge
+library(glmnet)
+HR_matrix=as.matrix(HR_2[,-c(9,10)])
+
+library(caret)
+#split data into training and test data
+train=createDataPartition(HR_matrix[,7], p=0.6, list=FALSE)
+training=HR_matrix[train,]
+testing=HR_matrix[-train,]
+
+HR_ridge=glmnet(training[,-7],training[,7],family = "binomial",alpha=0)
+plot(HR_ridge,xvar="lambda")
+label_curve(HR_ridge)
+
+HR_ridge=cv.glmnet(training[,-7],training[,7],family = "binomial",alpha=0,type.measure = "class")
+plot(HR_ridge)
+min_lambda=HR_ridge$lambda.min%>%print()
+coef(HR_ridge, s = "lambda.min")
+ridge_error=HR_ridge$cvm[HR_ridge$lambda==HR_ridge$lambda.min[1]]%>%print()
+
+HR_ridge=cv.glmnet(training[,-7],training[,7],family = "binomial",alpha=0,type.measure = "auc")
+plot(HR_ridge)
+
+prob=predict(HR_ridge,s=min_lambda,testing[,-7],type="response")
+pred=rep(1,nrow(testing))
+pred[prob<.5]=0
+table(pred,testing[,7])
+1-mean(pred==testing[,7])
+``` 
+
+```{r}
+#lasso
+HR_lasso=glmnet(training[,-7],training[,7],family = "binomial",alpha=1)
+plot(HR_lasso,xvar="lambda")
+label_curve(HR_lasso)
+
+HR_lasso=cv.glmnet(training[,-7],training[,7],family = "binomial",alpha=1,type.measure = "class")
+plot(HR_lasso)
+min_lambda=HR_lasso$lambda.min%>%print()
+coef(HR_lasso, s = "lambda.min")
+lasso_error=HR_lasso$cvm[HR_lasso$lambda==HR_lasso$lambda.min[1]]%>%print()
+
+HR_lasso=cv.glmnet(training[,-7],training[,7],family = "binomial",alpha=1,type.measure = "auc")
+plot(HR_lasso)
+
+prob=predict(HR_lasso,s=min_lambda,testing[,-7],type="response")
+pred=rep(1,nrow(testing))
+pred[prob<.5]=0
+table(pred,testing[,7])
+1-mean(pred==testing[,7])
+``` 
+
+#rnadom forest
+Number of trees to grow. In the random forests literature, this is referred to as the ntree parameter. ... Number of variables available for splitting at each tree node. In the random forests literature, this is referred to as the mtry parameter.
+mtry number of predictors sampled for spliting at each node.
+```{r cache=TRUE}
+library(ranger)
+library(randomForest)
+model_rf <- train(
+    make.names(factor(left)) ~ ., data = training_knn,
+    method = "ranger",
+    trControl = ctrl,
+   metric="ROC",
+    tuneLength = 10,
+    preProc = c('center', 'scale'),
+   importance = 'impurity'
+   
+)
+
+
+varImp(model_rf)
+
+print(model_rf)
+pred_rf <- predict(model_rf, testing_knn)
+table(pred_rf,testing_knn$left)
+roc_rf=roc(as.numeric(testing_knn$left),as.numeric(pred_rf))
+print(roc_rf)
+```
+
+``` {r}
+#checking the missingdata
+data<-HR
+apply(data,2,function(x) sum(is.na(x)))
+
+#split to train and test data set
+samplesize = 0.50 * nrow(data)
+index = sample( seq_len ( nrow ( data ) ), size = samplesize )
+datatrain = data[ index, ]
+datatest = data[ -index, ]
+data <- data[, sapply(data, is.numeric)]
+max = apply(data , 2 , max)
+min = apply(data, 2 , min)
+scale<-scale(data, center = min, scale = max - min)
+scaled<- as.data.frame(scale)
+trainNN = scaled[index , ]
+testNN = scaled[-index , ]
+
+#cv of nn 
+install.packages("e1071")
+library(e1071)
+rmodle=tune.nnet(left~.,data = datatrain,size = 1:13)
+summary(rmodel)
+plot(rmodle)
+
+#fitting the model 
+install.packages("nnet")
+install.packages("NeuralNetTools")
+library(nnet)
+library(NeuralNetTools)
+nnbod<-nnet(factor(left)~.,data=datatest,size=10)
+plotnet(nnbod)
+#predicting test model
+pre<-predict(nnbod,newdata = datatest[,-7],type="class")
+
+#misclassification rate 
+table(datatest[,7],predict(nnbod,newdata = datatest[,-7],type="class"))
+
+££predict
+pre<-predict(nnbod,newdata = datatest[,-7],type="class")
+plot(pre)
+
+££misclassfication table
+table(datatest[,7],predict(nnbod,newdata = datatest[,-7],type="class"))
+``` 
